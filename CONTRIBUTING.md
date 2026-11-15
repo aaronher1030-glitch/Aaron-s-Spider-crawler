@@ -79,6 +79,7 @@ Every format is converted to blocks (headings, paragraphs, list items, code) and
 | `src/app.ts` | DOM wiring. |
 | `server` | The local link fetcher used by the CLI, Docker and `npm run dev`. Plain Node, no dependencies. |
 | `bin` | The `spider-crawler` command. |
+| `extension` | The browser extension. `background.js` injects `live.js` (built from `src/live/`) when the spider is clicked: it reads the live page (`extract.ts`), summarizes it and walks the spider over it (`crawl.ts`), highlighting with the CSS Custom Highlight API. PDFs, images and selections go to the full app instead, handed over through IndexedDB (`src/inbox.ts`). `npm run build:extension` builds `dist-extension/`. |
 
 Two rules keep the project honest:
 

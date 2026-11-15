@@ -3,6 +3,7 @@ import { canvasMeasure } from './doc/layout';
 import { ACCEPT, loadDocument, UnsupportedFileError, type LoadInput } from './doc/load';
 import type { Doc } from './doc/types';
 import { fetchLink, parseLink } from './doc/url';
+import { takeFromInbox } from './inbox';
 import { Scene, type Phase } from './scene/scene';
 import { SKINS, skinById } from './spider/skins';
 import { clip } from './summarize';
@@ -332,6 +333,20 @@ export function startApp(): void {
       await open({ name, data: await res.arrayBuffer() });
     } catch (err) {
       toast(`Couldn't open the file from the command line (${err instanceof Error ? err.message : err}).`, true);
+    }
+  }
+
+  /** The page the browser extension read (extension/background.js). */
+  async function openFromExtension(id: string) {
+    // The address keeps no trace of it: a reload shows the landing page, not an error.
+    history.replaceState(null, '', location.pathname);
+    try {
+      const item = await takeFromInbox(id);
+      if (!item) return;
+      if (item.error !== undefined) toast(item.error, true);
+      else await open(item);
+    } catch (err) {
+      toast(`Couldn't open the page from the extension (${err instanceof Error ? err.message : err}).`, true);
     }
   }
 
@@ -911,6 +926,7 @@ export function startApp(): void {
     if (link) void openLink(link);
     else toast("The link in this page's address isn't valid.", true);
   } else if (params.get('local') === '1') void openLocalFile();
+  else if (params.get('inbox')) void openFromExtension(params.get('inbox')!);
 
   // Scripted, frame-perfect rendering (scripts/render-demo.mjs).
   if (capture) {

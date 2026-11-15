@@ -1,5 +1,5 @@
 # Runs when you push a version tag:  npm version patch && git push --follow-tags
-#   1. a GitHub Release with a ready-to-run zip (start.command / start.bat)
+#   1. a GitHub Release with a ready-to-run zip (start.command / start.bat) and the browser extension
 #   2. a Docker image on ghcr.io/lulu38m/spider-crawler (amd64 + arm64)
 #   3. the npm package, if an NPM_TOKEN secret is set (Settings → Secrets → Actions)
 name: Release
@@ -36,6 +36,8 @@ jobs:
           find "release/out/$name/dist" -name '*.map' -delete
           chmod +x "release/out/$name/start.command" "release/out/$name/bin/spider-crawler.mjs"
           cd release/out && zip -qr -X "$name.zip" "$name"
+      - name: Browser extension
+        run: npm run build:extension
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:

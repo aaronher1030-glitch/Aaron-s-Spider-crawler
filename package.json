@@ -47,6 +47,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "demo:render": "node scripts/render-demo.mjs",
+    "build:extension": "node scripts/build-extension.mjs",
     "start": "node bin/spider-crawler.mjs",
     "prepublishOnly": "npm test && npm run build"
   },

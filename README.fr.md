@@ -28,6 +28,7 @@ C'est un jouet, mais honnête : tout ce que fait l'araignée à l'écran est la 
 - 🕷️ **Animation procédurale, zéro keyframe** : cinématique inverse à deux segments pour chacune des huit pattes, démarche tétrapode (quatre pattes levées, puis les quatre autres), sauts entre les pages, fil de sécurité. L'araignée est dessinée comme son propre squelette.
 - 📄 **Lit de vrais fichiers** : PDF (rendu fidèle via pdf.js), Word (.docx), Markdown, HTML, texte et plus de 40 langages de programmation.
 - 📸 **Lit les photos et les scans** : photographie un courrier, colle une capture d'écran ou dépose un PDF scanné ; l'OCR tourne dans ton navigateur et l'araignée marche sur ta photo.
+- 🧩 **Une extension navigateur** : clique sur l'araignée dans Chrome, Edge ou Brave et elle lit la page ouverte, directement sur le site : le vrai texte est surligné, les mots-clés s'envolent vers une toile dans le coin, et le résumé s'ouvre à côté.
 - 🔗 **Lit aussi les liens** : articles, PDF en ligne, README GitHub, pages Wikipédia.
 - ❓ **Pose une question à l'araignée** (« quand ça se renouvelle ? », « quel est le chiffre d'affaires ? ») : elle court jusqu'au passage qui répond et le surligne en vert. Ça marche hors ligne ; avec une clé IA, la réponse est en plus reformulée.
 - 🚩 **Lit les CGU que personne ne lit** : conditions générales, politiques de confidentialité, contrats. L'araignée attrape en rouge les clauses à lire (reconduction tacite, engagement, résiliation, frais, remboursement, partage de données, droits sur vos contenus, arbitrage…).
@@ -48,6 +49,7 @@ Choisis la plus simple pour toi, c'est la même app partout.
 | | Comment | Pour |
 | --- | --- | --- |
 | **1. Rien à installer** | Ouvre **[lulu38m.github.io/spider-crawler](https://lulu38m.github.io/spider-crawler/)** | Essayer. Tes fichiers ne quittent pas ton navigateur. |
+| **Extension navigateur** | Chrome, Edge, Brave : voir [plus bas](#extension-navigateur) | L'araignée sur le site que tu lis, en un clic. |
 | **2. Une commande** | `npx @lulu38m/spider-crawler` | Lire n'importe quel lien. Nécessite [Node.js 22+](https://nodejs.org). |
 | **3. Docker** | `docker run --rm -p 8080:8080 ghcr.io/lulu38m/spider-crawler` | Un serveur, un home lab, le partager sur ton réseau. |
 | **4. Télécharger et double-cliquer** | Récupère le zip dans les [Releases](https://github.com/lulu38m/spider-crawler/releases), puis ouvre `start.command` (Mac) ou `start.bat` (Windows) | Sans terminal. Nécessite Node.js 22+. |
@@ -62,6 +64,18 @@ npx @lulu38m/spider-crawler https://example.com/post # lit une page web
 ```
 
 Sur Mac, si macOS refuse d'ouvrir `start.command` : clic droit, **Ouvrir**, puis **Ouvrir** encore (une seule fois).
+
+## Extension navigateur
+
+Clique sur l'araignée dans la barre d'outils (ou <kbd>Alt</kbd>+<kbd>Maj</kbd>+<kbd>S</kbd>) : elle **descend sur la page ouverte**, marche sous les phrases importantes et les surligne dans le vrai texte du site, emballe les mots-clés dans la soie et les emporte vers une toile dans le coin. Puis le résumé s'ouvre à côté de la page ; clique sur une phrase clé pour y aller. <kbd>K</kbd> saute au résumé, <kbd>Échap</kbd> (ou un nouveau clic sur l'araignée) la retire de la page.
+
+- Elle lit la page **telle que tu la vois** : derrière une connexion, après ses scripts, avec ce que tu as déplié.
+- Sur des CGU, les clauses à lire sont surlignées en rouge directement sur le site.
+- Les PDF et images ouverts dans un onglet, les fichiers bruts et les sélections (clic droit → **Crawl the selection**) s'ouvrent dans l'app complète, incluse dans l'extension. Idem pour **Open this page in Spider Crawler** (clic droit), pour faire une vidéo ou un résumé IA.
+- Rien n'est envoyé nulle part, ça marche hors ligne.
+- Le minimum de permissions : elle ne peut lire un onglet que quand tu cliques sur l'araignée (`activeTab`). Voir la [politique de confidentialité](PRIVACY.md).
+
+**L'installer** : télécharge `spider-crawler-extension-<version>.zip` dans les [Releases](https://github.com/lulu38m/spider-crawler/releases) et dézippe-le. Ouvre `chrome://extensions` (ou `edge://extensions`), active le **mode développeur**, clique sur **Charger l'extension non empaquetée** et choisis le dossier. Depuis les sources : `npm run build:extension`, puis charge `dist-extension/`.
 
 ## Lire un lien
 

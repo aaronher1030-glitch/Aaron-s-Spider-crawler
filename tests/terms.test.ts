@@ -19,7 +19,7 @@ describe('terms mode', () => {
   it('recognizes terms and contracts, and nothing else', () => {
     expect(looksLikeTerms(EN)).toBe(true);
     expect(looksLikeTerms(FR)).toBe(true);
-    for (const f of ['README.md', 'CONTRIBUTING.md', 'public/samples/spider-silk.md']) expect(looksLikeTerms(readFileSync(f, 'utf8')), f).toBe(false);
+    for (const f of ['README.md', 'README.fr.md', 'CONTRIBUTING.md', 'PRIVACY.md', 'public/samples/spider-silk.md']) expect(looksLikeTerms(readFileSync(f, 'utf8')), f).toBe(false);
   });
 
   it('flags the clauses that matter in English terms, with their details', () => {

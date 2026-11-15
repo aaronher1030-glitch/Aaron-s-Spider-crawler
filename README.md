@@ -38,6 +38,7 @@ It's a toy, but an honest one: everything the spider does on screen is the real 
 - 🕷️ **Procedural animation, zero keyframes.** Two-bone inverse kinematics for each of the eight legs, a tetrapod gait (four legs up, then the other four), jumps between pages, a dragline behind it. The spider is drawn as its own rig, so you see how it works.
 - 📄 **Reads real files.** PDFs keep their real look (rendered by pdf.js, with the spider walking on the actual words), plus Word (.docx), Markdown, HTML, plain text and 40+ programming languages.
 - 📸 **Reads photos and scans.** Snap a letter, paste a screenshot or drop a scanned PDF: OCR runs in your browser and the spider walks on your picture.
+- 🧩 **A browser extension.** Click the spider in Chrome, Edge or Brave and it crawls the page you're on, right on the site: the real text gets highlighted, the keywords fly to a web in the corner, and the summary opens beside the page.
 - 🔗 **Crawls links too.** Paste a URL: articles, PDFs online, GitHub READMEs, Wikipedia pages.
 - ❓ **Ask the spider.** Type a question ("when does it renew?", "what's the revenue?") and the spider runs to the passage that answers it and highlights it in green. Works offline; with an AI key, you also get the answer in plain words.
 - 🚩 **Reads the terms nobody reads.** Terms of service, privacy policies and contracts get a terms mode: the spider catches the clauses worth reading in red (automatic renewal, commitment, cancellation, fees, refunds, data sharing, rights over your content, arbitration…).
@@ -58,6 +59,7 @@ Pick the easiest one for you. They all run the same app.
 | | How | Good for |
 | --- | --- | --- |
 | **1. Nothing to install** | Open **[lulu38m.github.io/spider-crawler](https://lulu38m.github.io/spider-crawler/)** | Trying it. Files never leave your browser. |
+| **Browser extension** | Chrome, Edge, Brave: see [below](#browser-extension) | The spider on the site you're reading, in one click. |
 | **2. One command** | `npx @lulu38m/spider-crawler` | Crawling any link. Needs [Node.js 22+](https://nodejs.org). |
 | **3. Docker** | `docker run --rm -p 8080:8080 ghcr.io/lulu38m/spider-crawler` | Servers, a home lab, sharing on your network. |
 | **4. Download and double-click** | Get the zip from [Releases](https://github.com/lulu38m/spider-crawler/releases), then open `start.command` (Mac) or `start.bat` (Windows) | No terminal. Needs Node.js 22+. |
@@ -90,6 +92,20 @@ npm run dev        # http://localhost:5173
 
 That's Gatekeeper being careful with downloaded scripts. Right-click `start.command`, choose **Open**, then **Open** again. You only need to do it once.
 </details>
+
+## Browser extension
+
+Click the spider in your toolbar (or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) and it **drops onto the page you're on**: it rappels down on its thread, walks under the sentences that matter and highlights them in the real text, wraps the keywords in silk and carries them to a web in the corner. Then the summary opens beside the page; click a key sentence to jump to it. <kbd>K</kbd> skips to the summary, <kbd>Esc</kbd> (or clicking the spider again) takes it off the page.
+
+- It reads the page **as you see it**: behind a login, after its scripts ran, with what you unfolded. No link fetcher, no CORS wall.
+- Terms of service get their clauses highlighted in red, right on the site. Financial pages get their figures caught.
+- PDFs and images opened in a tab, raw files like a `README.md`, and selections (right-click → **Crawl the selection**) open in the full app, bundled in the extension. So does **Open this page in Spider Crawler** in the right-click menu, for recording a video or an AI summary.
+- Nothing is sent anywhere, and it works offline.
+- It asks for the fewest permissions possible: it can only read a tab when you click the spider (`activeTab`). See the [privacy policy](PRIVACY.md).
+
+**Install it:** download `spider-crawler-extension-<version>.zip` from [Releases](https://github.com/lulu38m/spider-crawler/releases) and unzip it. Open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**, click **Load unpacked** and pick the unzipped folder. From source: `npm run build:extension`, then load `dist-extension/`.
+
+To crawl PDFs saved on your computer, turn on **Allow access to file URLs** in the extension's details.
 
 ## Crawling links
 
@@ -260,7 +276,9 @@ src/
   app.ts       DOM wiring: inputs, controls, dialogs
 server/        the local link fetcher (plain Node, no dependencies)
 bin/           the `spider-crawler` command
-scripts/       frame-perfect video renderer, sample PDF generators
+scripts/       frame-perfect video renderer, extension build, sample PDF generators
+extension/     the browser extension: manifest, service worker, store listing
+src/live/      the spider on a live web page (the extension's content script)
 tests/         summarizer, finance, terms, sound, layout, gait, director, falling words, links and fetcher tests (vitest)
 ```
 

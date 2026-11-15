@@ -47,6 +47,8 @@ async function getWorker(): Promise<TesseractWorker> {
     // OEM 1: the LSTM engine only, the most accurate and the smallest download.
     return createWorker(['eng', 'fra'], 1, {
       workerPath: assetUrl('worker.min.js'),
+      // Straight from its file, not a blob: URL (browser extensions only run their own files).
+      workerBlobURL: false,
       corePath: assetUrl().replace(/\/$/, ''),
       langPath: assetUrl().replace(/\/$/, ''),
       logger: (m: { status: string; progress: number }) => {

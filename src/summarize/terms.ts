@@ -165,6 +165,10 @@ export function looksLikeTerms(text: string): boolean {
   const hits = sample.match(TERMS_VOCAB) ?? [];
   const distinct = new Set(hits.map((h) => h.toLowerCase())).size;
   if (distinct < 3 || hits.length < 5) return false;
+  // Density, not just a count: real terms say "you agree" and "the service" every few lines
+  // (25+ times per 1,000 words); a long README that merely describes terms mode doesn't (under 5).
+  const words = sample.split(/\s+/).length;
+  if ((hits.length / words) * 1000 < 6) return false;
   let categories = 0;
   for (const { re } of compiled) {
     re.lastIndex = 0;

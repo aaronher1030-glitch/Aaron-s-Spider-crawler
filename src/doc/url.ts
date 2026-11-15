@@ -1,3 +1,4 @@
+import { inExtension } from '../inbox';
 import { CODE_EXTENSIONS } from '../summarize/code';
 import { extensionOf, UnsupportedFileError, type LoadInput } from './load';
 
@@ -169,7 +170,9 @@ async function direct(url: URL): Promise<{ res: Response; finalUrl: URL }> {
     res = await fetch(url, { mode: 'cors', credentials: 'omit', redirect: 'follow', cache: 'no-store' });
   } catch {
     throw new UnsupportedFileError(
-      `${url.hostname} doesn't let other web pages read it, so this page can't fetch it. Run the spider on your computer with ${LOCAL_COMMAND} to crawl any link, or save the page and drop the file here.`,
+      inExtension
+        ? `${url.hostname} doesn't let other pages read it. Open the link in a tab and click the spider in your toolbar: it reads any page you can see.`
+        : `${url.hostname} doesn't let other web pages read it, so this page can't fetch it. Run the spider on your computer with ${LOCAL_COMMAND} to crawl any link, or save the page and drop the file here.`,
     );
   }
   if (!res.ok) throw Object.assign(new UnsupportedFileError(`${url.hostname} answered ${res.status}${res.statusText ? ` ${res.statusText}` : ''}.`), { status: res.status });
