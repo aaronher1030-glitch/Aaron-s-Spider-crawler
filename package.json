@@ -1,5 +1,5 @@
 {
-  "name": "@lulu38m/spider-crawler",
+  "name": "aaron-s-spider-crawler",
   "version": "0.5.0",
   "description": "A literal web crawler: drop a document, watch a spider read it, get the gist.",
   "keywords": [
@@ -15,15 +15,15 @@
     "creative-coding",
     "web-crawler"
   ],
-  "homepage": "https://lulu38m.github.io/spider-crawler/",
+  "homepage": "https://github.com/aaronher1030-glitch/Aaron-s-Spider-crawler",
   "bugs": {
-    "url": "https://github.com/lulu38m/spider-crawler/issues"
+    "url": "https://github.com/aaronher1030-glitch/Aaron-s-Spider-crawler/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/lulu38m/spider-crawler.git"
+    "url": "https://github.com/aaronher1030-glitch/Aaron-s-Spider-crawler.git"
   },
-  "author": "Lucas Moreau",
+  "author": "Aaron Hernandez",
   "license": "MIT",
   "type": "module",
   "bin": {
