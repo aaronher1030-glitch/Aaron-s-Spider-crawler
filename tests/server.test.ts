@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { checkUrl, createApiHandler, isPublicAddress } from '../server/api.mjs';
@@ -53,7 +54,7 @@ describe('API handler', () => {
       }
     });
     api = createServer(createApiHandler());
-    apiOpen = createServer(createApiHandler({ allowPrivate: true, localFile: new URL(import.meta.url).pathname }));
+    apiOpen = createServer(createApiHandler({ allowPrivate: true, localFile: fileURLToPath(import.meta.url) }));
     await Promise.all([listen(upstream), listen(api), listen(apiOpen)]);
     up = base(upstream);
   });

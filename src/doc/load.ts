@@ -1,7 +1,7 @@
 import { markdownToBlocks, textToBlocks } from './blocks';
 import { layoutBlocks, typesetFonts } from './layout';
 import { CODE_EXTENSIONS } from '../summarize/code';
-import type { Block, Doc, DocKind, Measure } from './types';
+import type { Block, Doc, DocKind, Figure, Measure } from './types';
 
 export interface LoadInput {
   name: string;
@@ -90,6 +90,7 @@ export async function loadDocument(input: LoadInput, measure: Measure, progress?
   let blocks: Block[];
   let kind: DocKind;
   let code = false;
+  let figures: Figure[] | undefined;
   if (ext === 'docx' || (typeof input.data !== 'string' && bytesStartWith(input.data, [0x50, 0x4b, 0x03, 0x04]))) {
     if (ext !== 'docx') throw new UnsupportedFileError(UNSUPPORTED.zip);
     progress?.('Opening the Word document…');
@@ -100,8 +101,9 @@ export async function loadDocument(input: LoadInput, measure: Measure, progress?
     const text = decodeText(input.data);
     if (!text.trim()) throw new UnsupportedFileError('This file is empty. The spider needs at least a few sentences.');
     if (ext === 'html' || ext === 'htm' || ext === 'xhtml' || (!ext && /^\s*<(!doctype|html)/i.test(text))) {
-      const { htmlFileToBlocks } = await import('./html');
+      const { htmlFileToBlocks, htmlFigures } = await import('./html');
       blocks = htmlFileToBlocks(text);
+      figures = htmlFigures(text, input.source);
       kind = 'html';
     } else if (CODE_EXTENSIONS.has(ext) && !['md', 'txt'].includes(ext)) {
       blocks = [{ kind: 'code', text }];
@@ -128,6 +130,7 @@ export async function loadDocument(input: LoadInput, measure: Measure, progress?
     fonts: layout.fonts,
     headings: layout.headings,
     codeExtension: code ? ext : undefined,
+    figures,
     warnings: [],
     source: input.source,
   };

@@ -1,4 +1,5 @@
 import { clamp, dist, type Vec2 } from '../core/math';
+import { collectDomFigures, type DomFigure } from '../doc/figures';
 import { Cocoons, type SlotProvider } from '../scene/cocoons';
 import { Dragline } from '../scene/trail';
 import { drawOrbWeb, makeOrbWeb, WEB_DONE, type OrbWeb } from '../scene/web';
@@ -68,6 +69,7 @@ export class LiveCrawl {
 
   private page: PageText;
   private summary: Summary;
+  private figures: DomFigure[] = [];
   private points: Point[];
   private targets: Target[];
   private spider: Spider;
@@ -107,6 +109,7 @@ export class LiveCrawl {
     if (this.page.text.replace(/\s/g, '').length < 200) throw new Error('not enough text');
     this.summary = summarize(this.page.text, { headings: this.page.headings });
     if (!this.summary.points.length) throw new Error('nothing to summarize');
+    this.figures = collectDomFigures(document, location.href);
     this.points = this.summary.points.map((p) => ({ start: p.start, end: p.end, text: p.text }));
     this.targets = this.makeTargets();
     this.k = clamp((this.page.fontSize / 17.5) * 0.88, 0.6, 1.2);
@@ -137,7 +140,7 @@ export class LiveCrawl {
     this.canvas.className = 'stage';
     this.shadow.append(this.canvas);
     const ui = document.createElement('div');
-    ui.innerHTML = panelHtml(this.summary);
+    ui.innerHTML = panelHtml(this.summary, this.figures);
     this.shadow.append(...ui.children);
     this.bar = this.shadow.querySelector('.bar')!;
     this.card = this.shadow.querySelector('.card')!;
@@ -177,6 +180,58 @@ export class LiveCrawl {
       this.close();
     });
     this.shadow.querySelectorAll<HTMLElement>('.points li').forEach((li, i) => li.addEventListener('click', () => this.showPoint(i)));
+    this.shadow.querySelectorAll<HTMLElement>('.gallery .shot').forEach((shot) => shot.addEventListener('click', () => this.showFigure(Number(shot.dataset.shot))));
+    this.shadow.querySelector('.figure-frame .view-close')?.addEventListener('click', () => this.closeFigure());
+    this.shadow.querySelector('.figure-view')?.addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) this.closeFigure();
+    });
+  }
+
+  /** The lightbox: the figure at full size, its caption, and a way back to the page. */
+  private showFigure(index: number): void {
+    const fig = this.figures[index];
+    if (!fig) return;
+    const view = this.shadow.querySelector<HTMLElement>('.figure-view');
+    if (!view) return;
+    const img = view.querySelector('img')!;
+    const title = view.querySelector('.figure-meta b')!;
+    const caption = view.querySelector('.figure-meta .cap')!;
+    const labels = view.querySelector<HTMLElement>('.figure-meta .labels')!;
+    const show = view.querySelector<HTMLElement>('.show-on-page')!;
+    img.src = fig.src ?? '';
+    img.hidden = !fig.src;
+    title.textContent = fig.label;
+    caption.textContent = fig.caption || 'No caption found near this graphic.';
+    labels.textContent = fig.labels ? `Text printed inside: ${fig.labels}` : '';
+    labels.hidden = !fig.labels;
+    show.hidden = !fig.el;
+    show.onclick = () => {
+      this.closeFigure();
+      fig.el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      this.flash(fig.el);
+    };
+    view.hidden = false;
+  }
+
+  private closeFigure(): void {
+    const view = this.shadow.querySelector<HTMLElement>('.figure-view');
+    if (!view) return;
+    view.hidden = true;
+    const img = view.querySelector('img');
+    if (img) img.removeAttribute('src');
+  }
+
+  /** A short yellow outline so the reader can see which graphic they were looking at. */
+  private flash(el: Element | null | undefined): void {
+    if (!(el instanceof HTMLElement)) return;
+    const outline = el.style.outline;
+    const offset = el.style.outlineOffset;
+    el.style.outline = '3px solid #f4b400';
+    el.style.outlineOffset = '4px';
+    window.setTimeout(() => {
+      el.style.outline = outline;
+      el.style.outlineOffset = offset;
+    }, 1600);
   }
 
   private on(target: EventTarget, type: string, fn: EventListener, opts?: AddEventListenerOptions): void {

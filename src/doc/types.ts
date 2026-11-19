@@ -47,8 +47,16 @@ export interface Decoration {
   text?: string;
 }
 
-/** Renders a PDF page into a canvas at `pixelsPerUnit` resolution. */
-export type PageRasterizer = (pixelsPerUnit: number) => Promise<HTMLCanvasElement>;
+/** Page-local box, y = top, in the same units as Line geometry. */
+export interface FigureBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Renders a PDF page into a canvas at `pixelsPerUnit` resolution, or just one region of it. */
+export type PageRasterizer = (pixelsPerUnit: number, region?: FigureBox) => Promise<HTMLCanvasElement>;
 
 export interface Page {
   index: number;
@@ -60,6 +68,27 @@ export interface Page {
   lines: Line[];
   decorations: Decoration[];
   rasterize?: PageRasterizer;
+}
+
+/** A graphic the document points at: a figure, a chart, a table, a plate, a scheme. */
+export type FigureKind = 'figure' | 'table' | 'chart' | 'exhibit' | 'plate' | 'scheme';
+
+/**
+ * A figure or table found in a document. `box` is the graphic on the page (PDF); `labels` is the
+ * text printed *inside* it (axis ticks, legend entries, cell headers), read from the text layer —
+ * never guessed. `src` is set instead when the graphic is an image on a web page.
+ */
+export interface Figure {
+  id: string;
+  /** Page index in Doc.pages (0 for images found in HTML). */
+  page: number;
+  kind: FigureKind;
+  label: string;
+  caption: string;
+  box?: FigureBox;
+  labels?: string;
+  src?: string;
+  href?: string;
 }
 
 export interface FontSpec {
@@ -78,6 +107,8 @@ export interface Doc {
   headings: Array<[number, number]>;
   /** For source files, e.g. "ts". */
   codeExtension?: string;
+  /** Figures, charts and tables found in the document. */
+  figures?: Figure[];
   warnings: string[];
   /** The web address it was crawled from, for documents opened from a link. */
   source?: string;

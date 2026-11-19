@@ -33,6 +33,8 @@ keywords. Nothing is faked for the animation.
 - **Reads photos and scans.** Drop a screenshot, photo or scanned PDF and OCR runs in the
   browser.
 - **Browser extension.** Crawl the page you are on with the spider overlaid on the real text.
+- **Figures & charts.** Papers, reports and web pages get a gallery of the real graphics, cropped
+  from the page with their captions — click one to read it at full size.
 - **Crawls links.** Paste a URL for articles, PDFs, GitHub READMEs and Wikipedia pages.
 - **Ask the spider.** Type a question and it runs to the passage that answers it, highlighting
   it in green.
@@ -112,6 +114,33 @@ server/        local link fetcher
 extension/     browser extension
 tests/         vitest suites
 ```
+
+## Figures & charts
+
+Research papers are mostly read through their figures, so the crawler collects them.
+
+On a PDF the text layer gives each caption's position ("Figure 3:", "TABLE IV", "Chart 1 —"), and
+the page's drawing operators give the boxes of the graphics — image XObjects, filled and stroked
+paths, and the pieces of a diagram that sit near each other. The graphic is cropped out of the
+rendered page at up to 1100 px wide and shown with its caption. Tables are mostly text and
+hairlines, so they are cropped from the text block under (or above) their caption instead.
+
+On a web page the figures come from the DOM: `<figure>` elements, chart containers, `<img>`,
+inline `<svg>` and `<canvas>`, together with the caption nearest to them. A caption only counts if
+it is labelled or lives in a caption element — a paragraph next to an image is not treated as a
+caption.
+
+```text
+PDF:     caption label + graphics operators  →  box  →  crop of the rendered page
+HTML:    figure / img / svg / canvas          →  src  →  shown as-is
+Both:    caption, label, page, and the text printed inside the graphic
+```
+
+The only text reported as "inside" a chart is text the document really prints there: axis ticks,
+legend entries, cell contents. Values are never estimated from pixels, and a chart made of pure
+vector paths will show its picture but no invented numbers. The gallery appears in the summary
+panel and in the extension's card, with a lightbox and a **Save figure** button; the Markdown
+export lists each figure with its caption.
 
 For the complete upstream documentation — including every feature, supported format, keyboard
 shortcut and deployment workflow — see the

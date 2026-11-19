@@ -1,6 +1,7 @@
 import { Readability } from '@mozilla/readability';
 import { htmlToBlocks } from './blocks';
-import type { Block } from './types';
+import { collectDomFigures } from './figures';
+import type { Block, Figure } from './types';
 
 /** Saved web pages: Readability strips the menus and ads, like a browser's reader mode. */
 export function htmlFileToBlocks(source: string): Block[] {
@@ -22,4 +23,21 @@ export function htmlFileToBlocks(source: string): Block[] {
   const blocks = htmlToBlocks(dom.body);
   if (title && blocks[0]?.text !== title) blocks.unshift({ kind: 'h1', text: title });
   return blocks;
+}
+
+/**
+ * Figures and charts in a saved or fetched web page. They stay as image addresses (the browser
+ * displays them itself), so this works for arXiv, journals and blogs alike.
+ */
+export function htmlFigures(source: string, base?: string): Figure[] {
+  const dom = new DOMParser().parseFromString(source, 'text/html');
+  return collectDomFigures(dom, base, 40, { canvas: false }).map((f) => ({
+    id: f.id,
+    page: f.page,
+    kind: f.kind,
+    label: f.label,
+    caption: f.caption,
+    src: f.src,
+    href: f.href,
+  }));
 }

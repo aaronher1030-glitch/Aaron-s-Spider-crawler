@@ -1,8 +1,9 @@
 import * as pdfjs from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { buildFigures, findCaptions, type CaptionBlock } from './figures';
 import { PAGE_WIDTH } from './layout';
 import { UnsupportedFileError } from './load';
-import type { Doc, Line, Measure, Page, Word } from './types';
+import type { Doc, Figure, FigureBox, Line, Measure, Page, Word } from './types';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -44,6 +45,9 @@ export async function parsePdf(data: ArrayBuffer, name: string, measure: Measure
 
   const pages: Page[] = [];
   const allLines: Array<{ page: Page; raw: RawLine; line: Line }> = [];
+  /** Kept so figures can be located once every page has its lines. */
+  const handles = new Map<number, { page: PdfPageLike; viewport: ViewportLike }>();
+  const captions = new Map<number, CaptionBlock[]>();
   let ocrPages = 0;
   let ocrSkipped = 0;
 
@@ -71,9 +75,17 @@ export async function parsePdf(data: ArrayBuffer, name: string, measure: Measure
       y: 0,
       lines: [],
       decorations: [],
-      rasterize: async (pixelsPerUnit: number) => {
+      rasterize: async (pixelsPerUnit: number, region?: { x: number; y: number; w: number; h: number }) => {
         const vp = pdfPage.getViewport({ scale: unit * pixelsPerUnit });
         const canvas = document.createElement('canvas');
+        if (region) {
+          // Only the figure's corner of the page: a small crop stays cheap and sharp.
+          canvas.width = Math.max(1, Math.ceil(region.w * pixelsPerUnit));
+          canvas.height = Math.max(1, Math.ceil(region.h * pixelsPerUnit));
+          const transform = [1, 0, 0, 1, -region.x * pixelsPerUnit, -region.y * pixelsPerUnit];
+          await pdfPage.render({ canvas, viewport: vp, transform, background: '#fbfbf8' }).promise;
+          return canvas;
+        }
         canvas.width = Math.ceil(vp.width);
         canvas.height = Math.ceil(vp.height);
         // pdf.js renders into an opaque context: paint the paper color, not transparency.
@@ -110,6 +122,9 @@ export async function parsePdf(data: ArrayBuffer, name: string, measure: Measure
       allLines.push({ page, raw, line });
     }
     pages.push(page);
+    handles.set(page.index, { page: pdfPage as unknown as PdfPageLike, viewport: viewport as unknown as ViewportLike });
+    const found = findCaptions(page.lines);
+    if (found.length) captions.set(page.index, found);
     onProgress?.(i, total);
   }
 
@@ -154,6 +169,8 @@ export async function parsePdf(data: ArrayBuffer, name: string, measure: Measure
   if (ocrSkipped) warnings.push(`${ocrSkipped} more scanned page${ocrSkipped > 1 ? 's were' : ' was'} skipped: OCR reads the first ${MAX_OCR_PAGES}.`);
   if (!text.trim()) throw new UnsupportedFileError("The spider couldn't find any text in this PDF, even with OCR.");
 
+  const figures = await collectFigures(pages, captions, handles);
+
   return {
     name,
     kind: 'pdf',
@@ -161,9 +178,187 @@ export async function parsePdf(data: ArrayBuffer, name: string, measure: Measure
     pages,
     fonts: [],
     headings,
+    figures,
     warnings,
     dispose: () => void task.destroy(),
   };
+}
+
+/**
+ * Locates the graphics behind each caption. Only pages that carry a caption pay for the extra
+ * operator-list pass, so a 300-page report with six figures stays cheap.
+ */
+async function collectFigures(
+  pages: Page[],
+  captions: Map<number, CaptionBlock[]>,
+  handles: Map<number, { page: PdfPageLike; viewport: ViewportLike }>,
+): Promise<Figure[]> {
+  if (!captions.size) return [];
+  const graphics = new Map<number, FigureBox[]>();
+  for (const index of captions.keys()) {
+    const handle = handles.get(index);
+    if (!handle) continue;
+    graphics.set(index, await graphicsOnPage(handle.page, handle.viewport));
+  }
+  return buildFigures(pages, captions, graphics);
+}
+
+interface PdfPageLike {
+  getOperatorList(): Promise<{ fnArray: number[]; argsArray: unknown[] }>;
+}
+
+interface ViewportLike {
+  width: number;
+  height: number;
+  transform: number[];
+}
+
+type Mat = [number, number, number, number, number, number];
+type Pt = [number, number];
+
+const IDENTITY: Mat = [1, 0, 0, 1, 0, 0];
+
+function multiply(m: Mat, n: Mat): Mat {
+  return [
+    m[0] * n[0] + m[2] * n[1],
+    m[1] * n[0] + m[3] * n[1],
+    m[0] * n[2] + m[2] * n[3],
+    m[1] * n[2] + m[3] * n[3],
+    m[0] * n[4] + m[2] * n[5] + m[4],
+    m[1] * n[4] + m[3] * n[5] + m[5],
+  ];
+}
+
+function applyMatrix(m: Mat, x: number, y: number): Pt {
+  return [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+}
+
+/** Points a path is made of, in its own space (pdf.js keeps them next to `constructPath`). */
+
+/**
+ * Bounding boxes of the things drawn on a page: images (XObjects and inline) and filled or
+ * stroked paths. Those are what a chart, a plot or a photo is made of.
+ */
+async function graphicsOnPage(page: PdfPageLike, viewport: ViewportLike): Promise<FigureBox[]> {
+  let ops: { fnArray: number[]; argsArray: unknown[] };
+  try {
+    ops = await page.getOperatorList();
+  } catch {
+    return [];
+  }
+  const OPS = pdfjs.OPS;
+  const unit = viewport.width / PAGE_WIDTH || 1;
+  const base = viewport.transform as Mat;
+  const pageArea = viewport.width * viewport.height;
+  const boxes: FigureBox[] = [];
+
+  let ctm: Mat = IDENTITY;
+  const stack: Mat[] = [];
+  let path: Pt[] = [];
+  let pathCtm: Mat = IDENTITY;
+
+  const emit = (points: Pt[], matrix: Mat) => {
+    if (!points.length) return;
+    const full = multiply(base, matrix);
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const [x, y] of points) {
+      const [dx, dy] = applyMatrix(full, x, y);
+      if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+      x0 = Math.min(x0, dx);
+      y0 = Math.min(y0, dy);
+      x1 = Math.max(x1, dx);
+      y1 = Math.max(y1, dy);
+    }
+    const w = (x1 - x0) / unit;
+    const h = (y1 - y0) / unit;
+    // Skip hairlines, bullets and glyph-sized marks; keep plots, photos and diagram clusters.
+    if (w < 22 || h < 22) return;
+    if (((x1 - x0) * (y1 - y0)) / pageArea < 0.003) return;
+    if (w > PAGE_WIDTH * 0.98 && h > viewport.height / unit * 0.98) return;
+    boxes.push({ x: x0 / unit, y: y0 / unit, w, h });
+  };
+
+  const image = () => {
+    emit(
+      [
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 1],
+      ],
+      ctm,
+    );
+  };
+
+  for (let i = 0; i < ops.fnArray.length; i++) {
+    const fn = ops.fnArray[i];
+    const args = ops.argsArray[i];
+    if (fn === OPS.save) {
+      stack.push(ctm);
+    } else if (fn === OPS.restore) {
+      ctm = stack.pop() ?? IDENTITY;
+    } else if (fn === OPS.transform) {
+      ctm = multiply(ctm, args as Mat);
+    } else if (fn === OPS.paintImageXObject || fn === OPS.paintInlineImageXObject || fn === OPS.paintImageMaskXObject) {
+      image();
+    } else if (fn === OPS.paintFormXObjectBegin) {
+      stack.push(ctm);
+      const matrix = (args as unknown[])?.[0];
+      if (Array.isArray(matrix) && matrix.length === 6) ctm = multiply(ctm, matrix as Mat);
+    } else if (fn === OPS.paintFormXObjectEnd) {
+      ctm = stack.pop() ?? ctm;
+    } else if (fn === OPS.constructPath) {
+      // v6: [paintOp, [pathData], minMax]. Older versions used [op, args] with separate paints.
+      const raw = Array.isArray(args) ? (args as unknown[]) : [];
+      const paint = typeof raw[0] === 'number' ? raw[0] : -1;
+      if (paint === OPS.clip || paint === OPS.eoClip || paint === OPS.endPath) continue;
+      const box = toNumbers(raw[2]);
+      const points: Pt[] = box.length === 4 ? [[box[0], box[1]], [box[2], box[3]]] : decodePath(toNumbers(raw[1]));
+      emit(points, ctm);
+    } else if (
+      fn === OPS.fill ||
+      fn === OPS.stroke ||
+      fn === OPS.fillStroke ||
+      fn === OPS.eoFill ||
+      fn === OPS.eoFillStroke ||
+      fn === OPS.closeFillStroke ||
+      fn === OPS.closeEOFillStroke
+    ) {
+      // Older pdf.js: the path was built by constructPath and painted by a separate op.
+      emit(path, pathCtm);
+      path = [];
+    }
+  }
+  return boxes;
+}
+
+/** Flattens typed arrays and arrays of numbers (pdf.js hands out Float32Arrays). */
+function toNumbers(value: unknown): number[] {
+  if (ArrayBuffer.isView(value)) return Array.from(value as unknown as ArrayLike<number>);
+  if (Array.isArray(value)) return value.flatMap((v) => toNumbers(v));
+  return [];
+}
+
+/**
+ * Path data in pdf.js v6 is a flat number stream: 0 moveTo(x,y), 1 lineTo(x,y),
+ * 2 curveTo(6), 3 quadraticCurveTo(4), 4 closePath. We only need the points.
+ */
+function decodePath(data: number[]): Pt[] {
+  const points: Pt[] = [];
+  for (let i = 0; i < data.length; ) {
+    const op = data[i++];
+    if (op === 0 || op === 1) {
+      points.push([data[i++], data[i++]]);
+    } else if (op === 2) {
+      for (let k = 0; k < 3; k++) points.push([data[i++], data[i++]]);
+    } else if (op === 3) {
+      for (let k = 0; k < 2; k++) points.push([data[i++], data[i++]]);
+    } else break;
+  }
+  return points;
 }
 
 /** Reads a scanned page with OCR and returns its lines in the shape the text layer gives. */

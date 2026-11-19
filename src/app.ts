@@ -1,7 +1,8 @@
 import { REPO_URL } from './config';
+import { captionRest, cropFigure } from './doc/figures';
 import { canvasMeasure } from './doc/layout';
 import { ACCEPT, loadDocument, UnsupportedFileError, type LoadInput } from './doc/load';
-import type { Doc } from './doc/types';
+import type { Doc, Figure } from './doc/types';
 import { fetchLink, parseLink } from './doc/url';
 import { takeFromInbox } from './inbox';
 import { Scene, type Phase } from './scene/scene';
@@ -240,6 +241,7 @@ export function startApp(): void {
     busy = true;
     const gen = ++generation;
     window.clearTimeout(panelTimer);
+    figureCache.clear();
     aiAbort?.abort();
     setPaused(false);
     if (scene.phase !== 'idle' && scene.phase !== 'loading') scene.reset();
@@ -440,11 +442,170 @@ export function startApp(): void {
 
   const summaryEl = $<HTMLElement>('summary');
 
+  /**
+   * Cropped figure images, keyed by `id@width`. Gallery thumbnails are rendered small so the panel
+   * fills quickly; the lightbox asks for a bigger crop of the same region. Cleared per document.
+   */
+  const figureCache = new Map<string, string>();
+  /** Crops already in flight, so a thumbnail and a click never render the same figure twice. */
+  const figurePending = new Map<string, Promise<string | null>>();
+  const THUMB_WIDTH = 700;
+  const FULL_WIDTH = 1600;
+  const figureDialog = $<HTMLDialogElement>('figure-dialog');
+
+  function renderGallery(doc: Doc): void {
+    const figures = doc.figures ?? [];
+    $('summary-gallery-block').hidden = !figures.length;
+    const host = $('summary-gallery');
+    if (!figures.length) {
+      host.replaceChildren();
+      return;
+    }
+    host.replaceChildren(
+      ...figures.map((fig, index) => {
+        const shot = document.createElement('button');
+        shot.type = 'button';
+        shot.className = `shot ${fig.kind}`;
+        shot.title = fig.caption || fig.label;
+        const img = document.createElement('img');
+        img.alt = fig.caption ? clip(fig.caption, 120) : fig.label;
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        const cap = document.createElement('span');
+        const label = document.createElement('b');
+        label.textContent = fig.label;
+        cap.append(label);
+        const rest = captionRest(fig.caption);
+        if (rest && rest !== fig.caption) {
+          const text = document.createElement('i');
+          text.textContent = clip(rest, 90);
+          cap.append(text);
+        }
+        shot.append(img, cap);
+        shot.addEventListener('click', () => void openFigure(figures, index, shot));
+        const ready = fig.src ?? figureCache.get(figKey(fig, THUMB_WIDTH));
+        if (ready) img.src = ready;
+        else void cropInto(img, shot, fig);
+        return shot;
+      }),
+    );
+  }
+
+  function figKey(fig: Figure, width: number): string {
+    return `${fig.id}@${width}`;
+  }
+
+  /**
+   * Two crops at a time. A PDF page with a path-heavy figure takes a second or two to render, and
+   * nine of those at once only fight over the same thread.
+   */
+  let cropSlots = 2;
+  const cropQueue: Array<() => void> = [];
+  async function withCropSlot<T>(run: () => Promise<T>): Promise<T> {
+    if (cropSlots > 0) cropSlots--;
+    else await new Promise<void>((resolve) => cropQueue.push(resolve));
+    try {
+      return await run();
+    } finally {
+      const next = cropQueue.shift();
+      if (next) next();
+      else cropSlots++;
+    }
+  }
+
+  async function cropInto(img: HTMLImageElement, shot: HTMLElement, fig: Figure): Promise<void> {
+    const url = await cropFor(fig, THUMB_WIDTH);
+    if (!url) {
+      shot.classList.add('no-shot');
+      img.hidden = true;
+      return;
+    }
+    img.src = url;
+  }
+
+  async function cropFor(fig: Figure, width: number): Promise<string | null> {
+    const key = figKey(fig, width);
+    const cached = figureCache.get(key);
+    if (cached) return cached;
+    const pending = figurePending.get(key);
+    if (pending) return pending;
+    const page = current?.doc.pages[fig.page];
+    const box = fig.box;
+    if (!box || !page) return null;
+    const job = withCropSlot(() => cropFigure(page, box, width))
+      .then((url) => {
+        if (url) figureCache.set(key, url);
+        return url;
+      })
+      .finally(() => figurePending.delete(key));
+    figurePending.set(key, job);
+    return job;
+  }
+
+  async function openFigure(figures: Figure[], index: number, shot: HTMLElement): Promise<void> {
+    const fig = figures[index];
+    const img = $<HTMLImageElement>('figure-image');
+    const empty = $('figure-empty');
+    const save = $<HTMLAnchorElement>('figure-download');
+    $('figure-title').textContent = fig.label;
+    $('figure-caption').textContent = fig.caption || 'No caption found near this graphic.';
+    const labels = $('figure-labels');
+    labels.textContent = fig.labels ? `Text printed inside: ${fig.labels}` : '';
+    labels.hidden = !fig.labels;
+    img.hidden = true;
+    empty.hidden = true;
+    save.hidden = true;
+    if (!figureDialog.open) figureDialog.showModal();
+    // Show the thumbnail we already have at once, then swap in a bigger crop of the same region.
+    const thumb = shot.querySelector('img');
+    const thumbUrl =
+      fig.src ?? thumb?.getAttribute('src') ?? figureCache.get(figKey(fig, THUMB_WIDTH));
+    if (thumbUrl) {
+      img.src = thumbUrl;
+      img.alt = fig.caption || fig.label;
+      img.hidden = false;
+      if (!fig.src) {
+        save.href = thumbUrl;
+        save.download = `${fileSafe(`${fig.label} - ${current?.doc.name ?? 'figure'}`)}.png`;
+        save.hidden = false;
+      }
+    }
+    const url = fig.src ?? (await cropFor(fig, FULL_WIDTH));
+    if (!url) {
+      if (!thumbUrl) empty.hidden = false;
+      return;
+    }
+    if (!thumbUrl) {
+      img.src = url;
+      img.alt = fig.caption || fig.label;
+      img.hidden = false;
+    }
+    if (url !== thumbUrl) {
+      // Decode first so the swap does not flash the old crop.
+      const sharper = new Image();
+      sharper.src = url;
+      await sharper.decode().catch(() => undefined);
+      img.src = url;
+    }
+    if (!fig.src) {
+      save.href = url;
+      save.download = `${fileSafe(`${fig.label} - ${current?.doc.name ?? 'figure'}`)}.png`;
+      save.hidden = false;
+    }
+  }
+
+  $('figure-close').addEventListener('click', () => figureDialog.close());
+  $('figure-dismiss').addEventListener('click', () => figureDialog.close());
+  figureDialog.addEventListener('click', (e) => {
+    if (e.target === figureDialog) figureDialog.close();
+  });
+
   function renderSummary() {
     if (!current) return;
     const { doc, summary } = current;
     $('summary-file').textContent = doc.name;
     $('summary-tldr').textContent = summary.tldr;
+    renderGallery(doc);
     const aiBlock = $('summary-ai');
     if (summary.ai) {
       aiBlock.hidden = false;
@@ -558,7 +719,7 @@ export function startApp(): void {
   $('copy-md').addEventListener('click', async () => {
     if (!current) return;
     try {
-      await navigator.clipboard.writeText(summaryMarkdown(current.doc.name, current.summary, current.doc.source));
+      await navigator.clipboard.writeText(summaryMarkdown(current.doc.name, current.summary, current.doc.source, current.doc.figures));
       toast('Summary copied as Markdown.');
     } catch {
       toast('Copying was blocked by the browser. Use Download .md instead.', true);
@@ -566,7 +727,7 @@ export function startApp(): void {
   });
   $('dl-md').addEventListener('click', () => {
     if (!current) return;
-    download(new Blob([summaryMarkdown(current.doc.name, current.summary, current.doc.source)], { type: 'text/markdown' }), `${fileSafe(current.doc.name)}-gist.md`);
+    download(new Blob([summaryMarkdown(current.doc.name, current.summary, current.doc.source, current.doc.figures)], { type: 'text/markdown' }), `${fileSafe(current.doc.name)}-gist.md`);
   });
   $('dl-png').addEventListener('click', async () => {
     if (!current) return;

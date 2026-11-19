@@ -1,6 +1,6 @@
 {
   "name": "aaron-s-spider-crawler",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A literal web crawler: drop a document, watch a spider read it, get the gist.",
   "keywords": [
     "spider",

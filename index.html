@@ -110,6 +110,11 @@
         </div>
         <h2 id="summary-title">The gist</h2>
         <p id="summary-tldr" class="tldr"></p>
+        <section id="summary-gallery-block" hidden>
+          <h3>Figures &amp; charts</h3>
+          <div id="summary-gallery" class="gallery"></div>
+          <p class="figures-note">Cropped from the document. Text printed inside a chart (axis ticks, legends) is read from the page itself, never guessed.</p>
+        </section>
         <section id="summary-clauses-block" hidden>
           <h3>Clauses to read</h3>
           <ul id="summary-clauses" class="clauses"></ul>
@@ -188,6 +193,23 @@
             <button class="btn primary" value="ok" type="submit">Save</button>
           </div>
         </form>
+      </dialog>
+
+      <dialog id="figure-dialog" class="sheet figure-sheet" aria-labelledby="figure-title">
+        <button id="figure-close" class="close" type="button" aria-label="Close figure">
+          <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15" /></svg>
+        </button>
+        <h2 id="figure-title"></h2>
+        <div class="figure-stage">
+          <img id="figure-image" alt="" />
+          <p id="figure-empty" class="figure-empty" hidden>The graphic itself could not be cropped. The caption is below.</p>
+        </div>
+        <p id="figure-caption" class="figure-caption"></p>
+        <p id="figure-labels" class="figure-labels"></p>
+        <div class="sheet-actions">
+          <a id="figure-download" class="btn outline" download>Save figure</a>
+          <button id="figure-dismiss" class="btn primary" type="button">Close</button>
+        </div>
       </dialog>
 
       <div id="rec-badge" class="rec-badge" hidden aria-hidden="true"><span class="dot"></span><span id="rec-time">0:00</span></div>

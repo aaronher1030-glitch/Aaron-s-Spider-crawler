@@ -1,4 +1,6 @@
 import { REPO_URL } from '../config';
+import { captionRest } from '../doc/figures';
+import type { Figure } from '../doc/types';
 import { Camera } from '../scene/camera';
 import { drawBackdrop } from '../scene/background';
 import { drawCocoon } from '../scene/cocoons';
@@ -33,7 +35,7 @@ export function fileSafe(name: string): string {
 }
 
 /** The summary as Markdown (copy or download). */
-export function summaryMarkdown(name: string, s: Summary, source?: string): string {
+export function summaryMarkdown(name: string, s: Summary, source?: string, figures?: Figure[]): string {
   const out: string[] = [`# ${baseName(name)}: the gist`, ''];
   if (source) out.push(`Source: <${source}>`, '');
   if (s.ai) {
@@ -51,6 +53,15 @@ export function summaryMarkdown(name: string, s: Summary, source?: string): stri
     out.push('## Key figures', '', '| | Value | Change | Period |', '| --- | --- | --- | --- |');
     for (const f of s.figures) out.push(`| ${f.label} | ${f.value} | ${f.change ?? ''} | ${f.period ?? ''} |`);
     out.push('', '_As stated in the document. Not financial advice._', '');
+  }
+  if (figures?.length) {
+    out.push('## Figures & charts', '');
+    for (const f of figures) {
+      const rest = captionRest(f.caption) || f.caption;
+      out.push(`- **${f.label}**${rest ? `: ${rest.replace(/\s+/g, ' ')}` : ''}`);
+      if (f.labels) out.push(`  - Text printed inside: ${f.labels}`);
+    }
+    out.push('', '_Captions and in-figure text as printed. Values are not guessed from the pixels._', '');
   }
   out.push(s.ai ? '## Key sentences, as written in the document' : '## Key sentences', '');
   if (s.mode === 'code') out.push(...s.points.map((p) => `- \`${p.label ?? ''}\`: \`${p.text.trim()}\``));

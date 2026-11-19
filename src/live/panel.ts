@@ -1,3 +1,5 @@
+import type { DomFigure } from '../doc/figures';
+import { captionRest } from '../doc/figures';
 import type { Summary } from '../summarize';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -44,11 +46,32 @@ ol, ul { margin: 0; padding-left: 20px; }
 .actions button:hover { background: rgba(255, 255, 255, 0.14); }
 .actions .open-app { background: #f4b400; color: #1b1d2e; }
 .actions .open-app:hover { background: #ffc629; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.gallery .shot { display: flex; flex-direction: column; gap: 6px; padding: 6px; text-align: left; border: 1px solid rgba(127, 196, 255, 0.18);
+  border-radius: 10px; background: rgba(255, 255, 255, 0.05); overflow: hidden; }
+.gallery .shot:hover, .gallery .shot:focus-visible { border-color: #f4b400; background: rgba(255, 255, 255, 0.1); }
+.gallery .shot img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #fff; border-radius: 6px; }
+.gallery .shot span { display: block; font-size: 11.5px; line-height: 1.35; color: #93a3c7; }
+.gallery .shot b { display: block; color: #e8ecf7; font-size: 12px; }
+.gallery .shot i { font-style: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.figure-view { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(6, 12, 30, 0.72); z-index: 2; }
+.figure-view[hidden] { display: none; }
+.figure-frame { position: relative; display: flex; flex-direction: column; gap: 12px; width: min(820px, 92vw); max-height: 88vh; overflow: auto;
+  padding: 18px; border-radius: 16px; background: #0c1834; border: 1px solid rgba(127, 196, 255, 0.25); box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5); }
+.figure-frame .view-close { position: absolute; top: 8px; right: 8px; padding: 4px 10px; border-radius: 8px; font-size: 20px; line-height: 1; color: #93a3c7; }
+.figure-frame .view-close:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.figure-frame img { max-width: 100%; max-height: 58vh; object-fit: contain; background: #fff; border-radius: 10px; }
+.figure-meta b { display: block; font-size: 15px; color: #fff; margin-bottom: 6px; }
+.figure-meta p { margin: 0; font-size: 13.5px; line-height: 1.5; color: #dfe6f5; }
+.figure-meta .labels { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.06); font-size: 12.5px; color: #93a3c7; overflow-wrap: anywhere; }
+.figure-actions { margin-top: 10px; }
+.figure-actions button { padding: 7px 12px; border-radius: 999px; font-weight: 600; background: rgba(255, 255, 255, 0.1); }
+.figure-actions button:hover { background: rgba(255, 255, 255, 0.16); }
 @media (prefers-reduced-motion: reduce) { .bar, .card { transition: none; } }
 `;
 
 /** The controls shown while crawling, and the summary card shown at the end. */
-export function panelHtml(summary: Summary): string {
+export function panelHtml(summary: Summary, figures: DomFigure[] = []): string {
   const minutes = summary.stats.readingMinutes;
   const time = minutes < 1 ? 'under a minute' : `about ${Math.round(minutes)} min`;
   const clauses = summary.clauses?.length
@@ -56,8 +79,18 @@ export function panelHtml(summary: Summary): string {
         .map((c) => `<li><b>${esc(c.label)}</b>${c.detail ? ` (${esc(c.detail)})` : ''}</li>`)
         .join('')}</ul>`
     : '';
-  const figures = summary.figures?.length
+  const figuresBlock = summary.figures?.length
     ? `<p class="eyebrow">Key figures</p><ul class="clauses">${summary.figures.map((f) => `<li><b>${esc(f.label)}</b> ${esc(f.value)}${f.change ? ` (${esc(f.change)})` : ''}</li>`).join('')}</ul>`
+    : '';
+  const gallery = figures.length
+    ? `<p class="eyebrow">Figures &amp; charts · ${figures.length}</p><div class="gallery">${figures
+        .map(
+          (f, i) => `<button class="shot" type="button" data-shot="${i}" title="${esc(f.caption || f.label)}">
+            ${f.src ? `<img src="${esc(f.src)}" alt="" loading="lazy" />` : ''}
+            <span><b>${esc(f.label)}</b>${f.caption ? `<i>${esc(captionRest(f.caption) || f.caption)}</i>` : ''}</span>
+          </button>`,
+        )
+        .join('')}</div>`
     : '';
   return `
 <div class="bar" role="toolbar" aria-label="Spider Crawler">
@@ -69,12 +102,25 @@ export function panelHtml(summary: Summary): string {
 <section class="card" role="dialog" aria-label="Summary of this page">
   <div class="head"><div class="brand">spider crawler <span>· the gist</span></div><button class="close" title="Close (Esc)" aria-label="Close">×</button></div>
   <p class="tldr">${esc(summary.tldr)}</p>
-  ${clauses}${figures}
+  ${gallery}
+  ${clauses}${figuresBlock}
   <p class="eyebrow">Key sentences</p>
   <ol class="points">${summary.points.map((p) => `<li title="Show it on the page">${esc(p.text)}</li>`).join('')}</ol>
   <p class="eyebrow">Keywords</p>
   <div class="chips">${summary.keywords.map((k) => `<span>${esc(k.phrase)}</span>`).join('')}</div>
   <p class="stats">${summary.stats.words.toLocaleString('en')} words, ${time} of reading. Read on this page, nothing sent anywhere.</p>
   <div class="actions"><button class="replay">Replay</button><button class="open-app" title="Open this page in the full Spider Crawler app (videos, AI summary, skins…)">Open in the app</button></div>
-</section>`;
+</section>
+${
+  gallery
+    ? `<div class="figure-view" hidden>
+  <div class="figure-frame" role="dialog" aria-label="Figure">
+    <button class="view-close" type="button" aria-label="Close figure">×</button>
+    <img alt="" />
+    <div class="figure-meta"><b></b><p class="cap"></p><p class="labels"></p>
+      <div class="figure-actions"><button class="show-on-page" type="button">Show on the page</button></div></div>
+  </div>
+</div>`
+    : ''
+}`;
 }
